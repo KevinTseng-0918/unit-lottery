@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>理化單元抽籤模擬器</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    background: #a8d8ea;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: #3a3a3a;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* 天空漸層 */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(180deg, #c9e8f5 0%, #a8d8ea 45%, #7ec8a0 80%, #5aaa78 100%);
+    z-index: 0;
+  }
+
+  /* 雲朵 */
+  .cloud {
+    position: fixed;
+    background: #fff;
+    border-radius: 50px;
+    opacity: 0.85;
+    z-index: 0;
+  }
+  .cloud::before, .cloud::after {
+    content: '';
+    position: absolute;
+    background: #fff;
+    border-radius: 50%;
+  }
+  .cloud1 { width:100px; height:30px; top:8%; left:5%; animation: drift 18s linear infinite; }
+  .cloud1::before { width:50px; height:50px; top:-25px; left:12px; }
+  .cloud1::after  { width:35px; height:35px; top:-18px; left:45px; }
+  .cloud2 { width:70px; height:22px; top:15%; left:60%; animation: drift 24s linear infinite 4s; }
+  .cloud2::before { width:36px; height:36px; top:-18px; left:8px; }
+  .cloud2::after  { width:26px; height:26px; top:-13px; left:32px; }
+  .cloud3 { width:120px; height:36px; top:5%; left:35%; animation: drift 20s linear infinite 10s; }
+  .cloud3::before { width:60px; height:60px; top:-30px; left:14px; }
+  .cloud3::after  { width:44px; height:44px; top:-22px; left:55px; }
+
+  @keyframes drift {
+    from { transform: translateX(0); }
+    to   { transform: translateX(110vw); }
+  }
+
+  /* 嚕嚕米 SVG 裝飾 */
+  .moomin-deco {
+    position: fixed;
+    bottom: 0;
+    z-index: 1;
+  }
+  .moomin-left  { left: -10px; }
+  .moomin-right { right: -10px; transform: scaleX(-1); }
+
+  /* 草地山丘 */
+  .hills {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    z-index: 0;
+  }
+
+  /* 內容層級 */
+  h1, .subtitle, .slot-wrapper, .history { position: relative; z-index: 2; }
+
+  h1 {
+    font-size: 1.6rem;
+    margin-bottom: 6px;
+    letter-spacing: 2px;
+    color: #2c5f3f;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.6);
+  }
+
+  .subtitle {
+    font-size: 0.85rem;
+    color: #4a7c5e;
+    margin-bottom: 30px;
+  }
+
+  .slot-wrapper {
+    background: rgba(255,255,255,0.72);
+    border: 2px solid rgba(255,255,255,0.9);
+    border-radius: 20px;
+    padding: 30px 24px;
+    width: 100%;
+    max-width: 420px;
+    text-align: center;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 10px 40px rgba(90,170,120,0.25);
+  }
+
+  .slot-display {
+    background: rgba(255,255,255,0.55);
+    border-radius: 12px;
+    padding: 20px 16px;
+    margin-bottom: 24px;
+    min-height: 140px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255,255,255,0.1);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .badge {
+    font-size: 0.75rem;
+    padding: 3px 10px;
+    border-radius: 20px;
+    margin-bottom: 10px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    transition: background 0.3s;
+  }
+
+  .badge.s8up   { background: #2ecc71; color: #000; }
+  .badge.s8down { background: #3498db; color: #fff; }
+  .badge.s9up   { background: #9b59b6; color: #fff; }
+  .badge.s9down { background: #e67e22; color: #fff; }
+  .badge.rolling { background: #b0cfc0; color: #555; }
+
+  .chapter-name {
+    font-size: 0.9rem;
+    color: #5a8a6a;
+    margin-bottom: 6px;
+  }
+
+  .unit-name {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #2c5f3f;
+    line-height: 1.4;
+  }
+
+  .unit-name.rolling {
+    color: #8ab09a;
+    font-size: 1.1rem;
+  }
+
+  .idle-text {
+    color: #7aaa8a;
+    font-size: 1rem;
+  }
+
+  .btn-draw {
+    width: 100%;
+    padding: 16px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    letter-spacing: 2px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    background: linear-gradient(135deg, #5aaa78, #2c8c55);
+    color: #fff;
+    transition: transform 0.1s, opacity 0.2s;
+    box-shadow: 0 6px 20px rgba(44,140,85,0.35);
+  }
+
+  .btn-draw:active { transform: scale(0.97); }
+  .btn-draw:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-reset {
+    margin-top: 12px;
+    width: 100%;
+    padding: 11px;
+    font-size: 0.9rem;
+    border: 1px solid rgba(90,170,120,0.35);
+    border-radius: 12px;
+    cursor: pointer;
+    background: transparent;
+    color: #5a8a6a;
+    transition: background 0.2s;
+  }
+  .btn-reset:hover { background: rgba(90,170,120,0.12); }
+
+  .history {
+    margin-top: 20px;
+    width: 100%;
+    max-width: 420px;
+  }
+
+  .history h2 {
+    font-size: 0.85rem;
+    color: #4a7c5e;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+  }
+
+  .history-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+
+  .history-list li {
+    background: rgba(255,255,255,0.55);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    color: #3a5a45;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .history-list li .num {
+    color: #8ab09a;
+    margin-right: 8px;
+    font-size: 0.75rem;
+  }
+
+  .confetti-container {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 999;
+  }
+
+  .confetti-piece {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    opacity: 0;
+    animation: fall linear forwards;
+  }
+
+  @keyframes fall {
+    0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 雲朵 -->
+<div class="cloud cloud1"></div>
+<div class="cloud cloud2"></div>
+<div class="cloud cloud3"></div>
+
+<!-- 草地山丘 -->
+<svg class="hills" viewBox="0 0 1200 200" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="200" cy="200" rx="350" ry="130" fill="#4a9e6a"/>
+  <ellipse cx="700" cy="210" rx="420" ry="120" fill="#5aaa78"/>
+  <ellipse cx="1100" cy="200" rx="300" ry="110" fill="#4a9e6a"/>
+  <ellipse cx="200" cy="210" rx="350" ry="110" fill="#5aaa78" opacity="0.6"/>
+</svg>
+
+<!-- 左側嚕嚕米 -->
+<svg class="moomin-deco moomin-left" width="120" height="180" viewBox="0 0 120 180" xmlns="http://www.w3.org/2000/svg">
+  <!-- 身體 -->
+  <ellipse cx="60" cy="130" rx="38" ry="46" fill="#f0f0e8"/>
+  <!-- 頭 -->
+  <ellipse cx="60" cy="78" rx="34" ry="32" fill="#f0f0e8"/>
+  <!-- 嘴巴/鼻子區域（吻部） -->
+  <ellipse cx="60" cy="90" rx="18" ry="12" fill="#e8e8d8"/>
+  <!-- 眼睛 -->
+  <circle cx="50" cy="72" r="5" fill="#222"/>
+  <circle cx="70" cy="72" r="5" fill="#222"/>
+  <circle cx="51.5" cy="70.5" r="1.5" fill="#fff"/>
+  <circle cx="71.5" cy="70.5" r="1.5" fill="#fff"/>
+  <!-- 鼻子 -->
+  <ellipse cx="60" cy="84" rx="5" ry="3" fill="#ccc"/>
+  <!-- 耳朵 -->
+  <ellipse cx="36" cy="58" rx="8" ry="10" fill="#f0f0e8"/>
+  <ellipse cx="84" cy="58" rx="8" ry="10" fill="#f0f0e8"/>
+  <!-- 尾巴 -->
+  <path d="M95 150 Q115 140 110 160" stroke="#ddd" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <!-- 腳 -->
+  <ellipse cx="44" cy="172" rx="14" ry="8" fill="#e0e0d0"/>
+  <ellipse cx="76" cy="172" rx="14" ry="8" fill="#e0e0d0"/>
+</svg>
+
+<!-- 右側嚕嚕米（小嗅嗅，較小） -->
+<svg class="moomin-deco moomin-right" width="80" height="130" viewBox="0 0 80 130" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="40" cy="92" rx="26" ry="34" fill="#f0f0e8"/>
+  <ellipse cx="40" cy="55" rx="24" ry="22" fill="#f0f0e8"/>
+  <ellipse cx="40" cy="64" rx="13" ry="9" fill="#e8e8d8"/>
+  <circle cx="32" cy="50" r="4" fill="#222"/>
+  <circle cx="48" cy="50" r="4" fill="#222"/>
+  <circle cx="33" cy="49" r="1.2" fill="#fff"/>
+  <circle cx="49" cy="49" r="1.2" fill="#fff"/>
+  <ellipse cx="40" cy="61" rx="4" ry="2.5" fill="#ccc"/>
+  <ellipse cx="24" cy="40" rx="6" ry="7" fill="#f0f0e8"/>
+  <ellipse cx="56" cy="40" rx="6" ry="7" fill="#f0f0e8"/>
+  <path d="M63 106 Q76 98 73 114" stroke="#ddd" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <ellipse cx="30" cy="123" rx="10" ry="6" fill="#e0e0d0"/>
+  <ellipse cx="50" cy="123" rx="10" ry="6" fill="#e0e0d0"/>
+</svg>
+
+<h1>🌿 理化單元抽籤模擬器</h1>
+<p class="subtitle">翰林版 八年級上下 ＋ 九年級上下｜共 68 個單元</p>
+
+<div class="slot-wrapper">
+  <div class="slot-display" id="display">
+    <p class="idle-text">按下按鈕開始抽籤</p>
+  </div>
+  <button class="btn-draw" id="btnDraw" onclick="draw()">🎲 開始抽籤</button>
+  <button class="btn-reset" onclick="resetHistory()">清除紀錄</button>
+</div>
+
+<div class="history">
+  <h2>▸ 抽籤紀錄</h2>
+  <ul class="history-list" id="historyList"></ul>
+</div>
+
+<div class="confetti-container" id="confettiContainer"></div>
+
+<script>
+const units = [
+  // 八上
+  { book: '八上', badge: 's8up',   chapter: '第1章 基本測量',       name: '1-1 長度、質量與時間' },
+  { book: '八上', badge: 's8up',   chapter: '第1章 基本測量',       name: '1-2 測量與估計' },
+  { book: '八上', badge: 's8up',   chapter: '第1章 基本測量',       name: '1-3 體積與密度' },
+  { book: '八上', badge: 's8up',   chapter: '第2章 物質的世界',     name: '2-1 認識物質' },
+  { book: '八上', badge: 's8up',   chapter: '第2章 物質的世界',     name: '2-2 溶液與濃度' },
+  { book: '八上', badge: 's8up',   chapter: '第2章 物質的世界',     name: '2-3 混合物的分離' },
+  { book: '八上', badge: 's8up',   chapter: '第3章 波動與聲音',     name: '3-1 波的傳播與特徵' },
+  { book: '八上', badge: 's8up',   chapter: '第3章 波動與聲音',     name: '3-2 聲音的形成' },
+  { book: '八上', badge: 's8up',   chapter: '第3章 波動與聲音',     name: '3-3 多變的聲音' },
+  { book: '八上', badge: 's8up',   chapter: '第3章 波動與聲音',     name: '3-4 聲波的傳播與應用' },
+  { book: '八上', badge: 's8up',   chapter: '第4章 光、影像與顏色', name: '4-1 光的傳播' },
+  { book: '八上', badge: 's8up',   chapter: '第4章 光、影像與顏色', name: '4-2 光的反射與面鏡成像' },
+  { book: '八上', badge: 's8up',   chapter: '第4章 光、影像與顏色', name: '4-3 光的折射' },
+  { book: '八上', badge: 's8up',   chapter: '第4章 光、影像與顏色', name: '4-4 透鏡成像' },
+  { book: '八上', badge: 's8up',   chapter: '第4章 光、影像與顏色', name: '4-5 色散與顏色' },
+  { book: '八上', badge: 's8up',   chapter: '第5章 溫度與熱',       name: '5-1 溫度與溫度計' },
+  { book: '八上', badge: 's8up',   chapter: '第5章 溫度與熱',       name: '5-2 熱量' },
+  { book: '八上', badge: 's8up',   chapter: '第5章 溫度與熱',       name: '5-3 比熱' },
+  { book: '八上', badge: 's8up',   chapter: '第5章 溫度與熱',       name: '5-4 熱對物質的影響' },
+  { book: '八上', badge: 's8up',   chapter: '第5章 溫度與熱',       name: '5-5 熱的傳播方式' },
+  { book: '八上', badge: 's8up',   chapter: '第6章 物質的基本結構', name: '6-1 元素與化合物' },
+  { book: '八上', badge: 's8up',   chapter: '第6章 物質的基本結構', name: '6-2 生活中常見的元素' },
+  { book: '八上', badge: 's8up',   chapter: '第6章 物質的基本結構', name: '6-3 原子結構' },
+  { book: '八上', badge: 's8up',   chapter: '第6章 物質的基本結構', name: '6-4 週期表' },
+  { book: '八上', badge: 's8up',   chapter: '第6章 物質的基本結構', name: '6-5 分子與化學式' },
+  // 八下
+  { book: '八下', badge: 's8down', chapter: '第1章 化學反應',       name: '1-1 質量守恆定律' },
+  { book: '八下', badge: 's8down', chapter: '第1章 化學反應',       name: '1-2 化學反應的表示法' },
+  { book: '八下', badge: 's8down', chapter: '第2章 氧化還原反應',   name: '2-1 氧化反應與活性' },
+  { book: '八下', badge: 's8down', chapter: '第2章 氧化還原反應',   name: '2-2 氧化與還原反應' },
+  { book: '八下', badge: 's8down', chapter: '第3章 電解質與酸鹼鹽', name: '3-1 電解質' },
+  { book: '八下', badge: 's8down', chapter: '第3章 電解質與酸鹼鹽', name: '3-2 酸和鹼' },
+  { book: '八下', badge: 's8down', chapter: '第3章 電解質與酸鹼鹽', name: '3-3 酸鹼的強弱與pH值' },
+  { book: '八下', badge: 's8down', chapter: '第3章 電解質與酸鹼鹽', name: '3-4 酸鹼反應' },
+  { book: '八下', badge: 's8down', chapter: '第4章 反應速率與平衡', name: '4-1 反應速率' },
+  { book: '八下', badge: 's8down', chapter: '第4章 反應速率與平衡', name: '4-2 可逆反應與平衡' },
+  { book: '八下', badge: 's8down', chapter: '第5章 有機化合物',     name: '5-1 有機化合物的組成' },
+  { book: '八下', badge: 's8down', chapter: '第5章 有機化合物',     name: '5-2 常見的有機化合物' },
+  { book: '八下', badge: 's8down', chapter: '第5章 有機化合物',     name: '5-3 聚合物與衣料纖維' },
+  { book: '八下', badge: 's8down', chapter: '第5章 有機化合物',     name: '5-4 食品與清潔劑' },
+  { book: '八下', badge: 's8down', chapter: '第6章 力與壓力',       name: '6-1 力與平衡' },
+  { book: '八下', badge: 's8down', chapter: '第6章 力與壓力',       name: '6-2 摩擦力' },
+  { book: '八下', badge: 's8down', chapter: '第6章 力與壓力',       name: '6-3 壓力' },
+  { book: '八下', badge: 's8down', chapter: '第6章 力與壓力',       name: '6-4 浮力' },
+  // 九上
+  { book: '九上', badge: 's9up',   chapter: '第1章 直線運動',           name: '1-1 位置、路徑長與位移' },
+  { book: '九上', badge: 's9up',   chapter: '第1章 直線運動',           name: '1-2 速率與速度' },
+  { book: '九上', badge: 's9up',   chapter: '第1章 直線運動',           name: '1-3 加速度運動' },
+  { book: '九上', badge: 's9up',   chapter: '第1章 直線運動',           name: '1-4 自由落體運動' },
+  { book: '九上', badge: 's9up',   chapter: '第2章 力與運動',           name: '2-1 慣性定律' },
+  { book: '九上', badge: 's9up',   chapter: '第2章 力與運動',           name: '2-2 運動定律' },
+  { book: '九上', badge: 's9up',   chapter: '第2章 力與運動',           name: '2-3 作用力與反作用力定律' },
+  { book: '九上', badge: 's9up',   chapter: '第2章 力與運動',           name: '2-4 圓周運動與萬有引力' },
+  { book: '九上', badge: 's9up',   chapter: '第2章 力與運動',           name: '2-5 力矩與槓桿原理' },
+  { book: '九上', badge: 's9up',   chapter: '第3章 功與能',             name: '3-1 功與功率' },
+  { book: '九上', badge: 's9up',   chapter: '第3章 功與能',             name: '3-2 動能' },
+  { book: '九上', badge: 's9up',   chapter: '第3章 功與能',             name: '3-3 位能、能量守恆定律與能源' },
+  { book: '九上', badge: 's9up',   chapter: '第3章 功與能',             name: '3-4 簡單機械' },
+  { book: '九上', badge: 's9up',   chapter: '第4章 電流、電壓與歐姆定律', name: '4-1 電荷與靜電現象' },
+  { book: '九上', badge: 's9up',   chapter: '第4章 電流、電壓與歐姆定律', name: '4-2 電流' },
+  { book: '九上', badge: 's9up',   chapter: '第4章 電流、電壓與歐姆定律', name: '4-3 電壓' },
+  { book: '九上', badge: 's9up',   chapter: '第4章 電流、電壓與歐姆定律', name: '4-4 歐姆定律與電阻' },
+  // 九下
+  { book: '九下', badge: 's9down', chapter: '第1章 電與生活', name: '1-1 電流的熱效應' },
+  { book: '九下', badge: 's9down', chapter: '第1章 電與生活', name: '1-2 生活用電' },
+  { book: '九下', badge: 's9down', chapter: '第1章 電與生活', name: '1-3 電池' },
+  { book: '九下', badge: 's9down', chapter: '第1章 電與生活', name: '1-4 電流的化學效應' },
+  { book: '九下', badge: 's9down', chapter: '第2章 電與磁',   name: '2-1 磁鐵與磁場' },
+  { book: '九下', badge: 's9down', chapter: '第2章 電與磁',   name: '2-2 電流的磁效應' },
+  { book: '九下', badge: 's9down', chapter: '第2章 電與磁',   name: '2-3 電流與磁場的交互作用' },
+  { book: '九下', badge: 's9down', chapter: '第2章 電與磁',   name: '2-4 電磁感應' },
+];
+
+const bookLabel = { '八上': '八年級上', '八下': '八年級下', '九上': '九年級上', '九下': '九年級下' };
+let history = [];
+let rolling = false;
+
+function draw() {
+  if (rolling) return;
+  rolling = true;
+  document.getElementById('btnDraw').disabled = true;
+
+  const result = units[Math.floor(Math.random() * units.length)];
+  const display = document.getElementById('display');
+  let count = 0;
+  const totalTicks = 28;
+  let interval = 60;
+
+  function tick() {
+    const fake = units[Math.floor(Math.random() * units.length)];
+    display.innerHTML = `
+      <span class="badge rolling">${fake.book}</span>
+      <div class="chapter-name" style="color:#666">${fake.chapter}</div>
+      <div class="unit-name rolling">${fake.name}</div>
+    `;
+    count++;
+    if (count >= totalTicks) {
+      showResult(result);
+    } else {
+      interval = Math.min(interval * 1.12, 320);
+      setTimeout(tick, interval);
+    }
+  }
+  tick();
+}
+
+function showResult(unit) {
+  const display = document.getElementById('display');
+  display.innerHTML = `
+    <span class="badge ${unit.badge}">${bookLabel[unit.book]}</span>
+    <div class="chapter-name">${unit.chapter}</div>
+    <div class="unit-name">${unit.name}</div>
+  `;
+
+  history.unshift(unit);
+  renderHistory();
+  launchConfetti();
+
+  rolling = false;
+  document.getElementById('btnDraw').disabled = false;
+}
+
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  list.innerHTML = history.map((u, i) => `
+    <li>
+      <span><span class="num">${i + 1}.</span>${u.name}</span>
+      <span style="color:#666;font-size:0.75rem">${u.book}</span>
+    </li>
+  `).join('');
+}
+
+function resetHistory() {
+  history = [];
+  renderHistory();
+  document.getElementById('display').innerHTML = '<p class="idle-text">按下按鈕開始抽籤</p>';
+}
+
+function launchConfetti() {
+  const container = document.getElementById('confettiContainer');
+  const colors = ['#f5576c','#f093fb','#4facfe','#43e97b','#fa709a','#fee140'];
+  for (let i = 0; i < 60; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti-piece';
+    el.style.left = Math.random() * 100 + 'vw';
+    el.style.top = '-10px';
+    el.style.background = colors[Math.floor(Math.random() * colors.length)];
+    el.style.borderRadius = Math.random() > 0.5 ? '50%' : '0';
+    el.style.width = (6 + Math.random() * 8) + 'px';
+    el.style.height = (6 + Math.random() * 8) + 'px';
+    el.style.animationDuration = (1.2 + Math.random() * 1.5) + 's';
+    el.style.animationDelay = (Math.random() * 0.5) + 's';
+    container.appendChild(el);
+    el.addEventListener('animationend', () => el.remove());
+  }
+}
+</script>
+</body>
+</html>
